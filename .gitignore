@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# AWS
+.aws/
+aws.config
+
+# Generic Secrets
+*config.json
+*.pem
+*.key
