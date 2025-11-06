@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recipe Assistant Demo</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1180.0.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px; /* Reduced overall padding */
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            /* --- REVISED BACKGROUND STYLES --- */
+            background-image: url('https://srinithyaccprojectdemo.s3.us-east-1.amazonaws.com/background_cc_project.jpg'); /* <<< PASTE S3 IMAGE URL HERE */
+            background-size: cover; /* Cover might hide parts, 'contain' shows all */
+            background-position: center center; /* Center horizontally and vertically */
+            background-repeat: no-repeat; /* Don't repeat the image */
+            background-attachment: fixed; /* Keep background fixed during scroll */
+        }
+        /* Overlay slightly darker for contrast with white text */
+        body::before {
+             content: '';
+             position: fixed;
+             top: 0; left: 0;
+             width: 100%; height: 100%;
+             background-color: rgba(40, 40, 60, 0.75); /* Dark blue/grey tint */
+             z-index: -1;
+         }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 25px 35px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+            margin-bottom: 20px;
+             z-index: 1;
+			box-sizing: border-box;
+        }
+        h1 {
+            color: #d9534f;
+            margin-bottom: 12px;
+            font-size: 2.2em;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+         h1 .emoji {
+             display: inline-block;
+             margin-left: 8px;
+             font-size: 0.8em;
+             vertical-align: middle;
+         }
+        p {
+            color: #333;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }
+        .chat-container {
+            width: 90%;
+            max-width: 600px;
+            margin-top: 20px;
+            border: none;
+			box-sizing: border-box;
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+             z-index: 1;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background-color: #fcfcfc;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 75%;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #5bc0de;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+        .bot-message {
+            background-color: #f7f7f7;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+        }
+        .input-area { display: flex; padding: 12px; background-color: #f1f3f5; border-top: 1px solid #e9ecef;}
+        #userInput {
+            flex-grow: 1; padding: 12px 15px;
+            border: 1px solid #ced4da;
+            border-radius: 20px; margin-right: 10px;
+            font-size: 1em;
+        }
+        #sendButton {
+            padding: 10px 20px;
+            background-color: #d9534f;
+             color: white; border: none;
+            border-radius: 20px; cursor: pointer;
+            font-size: 1em; transition: background-color 0.2s ease;
+             font-weight: bold;
+        }
+        #sendButton:hover { background-color: #c9302c; }
+        #recipe-display { margin-top: 15px; padding: 15px; background-color: #fff; border: 1px solid #dee2e6; border-radius: 8px; text-align: center; display: none; }
+        #recipe-title { font-size: 1.3em; font-weight: bold; color: #495057; margin-bottom: 10px; }
+        #recipe-image { max-width: 100%; height: auto; border-radius: 6px; margin-bottom: 10px; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        #recipe-status { font-style: italic; color: #6c757d; }
+        button#playButton{background-color:#5cb85c; color:white; border:none; padding:5px 10px; margin-left:10px; border-radius:4px; cursor:pointer; font-size:0.8em; vertical-align: middle; transition: background-color 0.2s ease;}
+        button#playButton:hover{background-color:#4cae4c;}
+         button#playButton:disabled { background-color: #a0a0a0; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Voice Recipe Assistant! <span class="emoji">🍳</span></h1>
+        <p>
+            Welcome! Ask me to find recipes, update preferences, or get cooking steps. Type your message below.
+        </p>
+        <div id="recipe-display">
+            <div id="recipe-title">Recipe Title</div>
+            <img id="recipe-image" src="" alt="Recipe Image" style="display: none;"/>
+            <div id="recipe-status"></div>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages" id="chatbox">
+            </div>
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="Type your message...">
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // --- AWS Lex V2 Custom Chat Interface with Polly ---
+
+        // ** CONFIGURE THESE VALUES **
+        const lexConfig = {
+            identityPoolId: 'us-east-1:34c5614e-20de-4a4f-8b1c-ef3337035eb2', // Replace with your Cognito Identity Pool ID
+            region: 'us-east-1',                   // Replace with your AWS Region (e.g., 'us-east-1')
+            botId: 'CHL3QXZFVQ',                    // Replace with your Lex Bot ID
+            botAliasId: 'TSTALIASID',             // Replace with your Lex Bot Alias ID
+            localeId: 'en_US',                       // Replace with your Bot Locale
+            userId: 'user-' + Date.now()             // Generate a simple unique user ID for the session
+        };
+        // ***************************
+
+        AWS.config.region = lexConfig.region;
+        AWS.config.credentials = new AWS.CognitoIdentityCredentials({ IdentityPoolId: lexConfig.identityPoolId });
+        const lexruntime = new AWS.LexRuntimeV2();
+        const polly = new AWS.Polly({ apiVersion: '2016-06-10' });
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let currentAudioSource = null;
+
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('userInput');
+        const sendButton = document.getElementById('sendButton');
+        const recipeDisplay = document.getElementById('recipe-display');
+        const recipeTitle = document.getElementById('recipe-title');
+        const recipeImage = document.getElementById('recipe-image');
+        const recipeStatus = document.getElementById('recipe-status');
+
+        sendButton.addEventListener('click', sendMessageToLex);
+        userInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessageToLex(); });
+
+        function sendMessageToLex() {
+            const inputText = userInput.value.trim();
+            if (!inputText) return;
+            displayMessage(inputText, 'user-message');
+            userInput.value = '';
+            // --- Resume AudioContext on first user interaction ---
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(e => console.error("AudioContext resume failed:", e)); // Add error handling
+            }
+            // --------------------------------------------------
+            const params = { botId: lexConfig.botId, botAliasId: lexConfig.botAliasId, localeId: lexConfig.localeId, sessionId: lexConfig.userId, text: inputText };
+            lexruntime.recognizeText(params, (err, data) => {
+                if (err) { console.error("Lex Error:", err); displayMessage("Sorry, error connecting to assistant.", 'bot-message'); }
+                else { console.log("Lex Response:", data); handleLexResponse(data); }
+            });
+        }
+
+        function handleLexResponse(data) {
+            let botMessageText = "Sorry, I didn't understand.";
+            let isSsml = false;
+            let recipeInfo = null;
+            if (data.messages && data.messages.length > 0) {
+                const message = data.messages[0];
+                botMessageText = message.content;
+                if (message.contentType === 'SSML') isSsml = true;
+            }
+            if (data.sessionState?.sessionAttributes?.appContext) {
+                 try { const ctx = JSON.parse(data.sessionState.sessionAttributes.appContext); if (ctx.recipeInfo) recipeInfo = ctx.recipeInfo; }
+                 catch (e) { console.error("Error parsing appContext:", e); }
+            }
+            const msgDiv = displayMessage(botMessageText, 'bot-message'); // Display text first
+            if (isSsml) synthesizeAndPlay(botMessageText, msgDiv); // Then play audio if needed
+            if (recipeInfo && recipeInfo.imageUrl) {
+                recipeTitle.textContent = recipeInfo.title || 'Recipe';
+                recipeImage.src = recipeInfo.imageUrl; recipeImage.alt = recipeInfo.title || 'Recipe';
+                recipeImage.style.display = 'block'; recipeStatus.textContent = '';
+                recipeDisplay.style.display = 'block';
+            } else {
+                // Keep recipe display hidden if no image info
+                recipeImage.style.display = 'none'; recipeTitle.textContent = '';
+                recipeStatus.textContent = ''; recipeDisplay.style.display = 'none';
+            }
+        }
+
+        // --- Updated displayMessage function with entity decoding ---
+        function displayMessage(text, className) {
+            const msgDiv = document.createElement('div'); msgDiv.classList.add('message', className);
+            const tmp = document.createElement('textarea');
+            // Strip SSML tags before decoding entities
+            tmp.innerHTML = (text || "").replace(/<[^>]*>/g, '');
+            msgDiv.textContent = tmp.value; // Decode entities
+            chatbox.appendChild(msgDiv); chatbox.scrollTop = chatbox.scrollHeight;
+            return msgDiv;
+        }
+        // --- END OF UPDATED function ---
+
+        function synthesizeAndPlay(textToSpeak, messageDiv) {
+            if (currentAudioSource) { try { currentAudioSource.stop(); } catch(e) {} currentAudioSource = null; }
+            console.log("Sending SSML to Polly:", textToSpeak);
+            const params = { Text: textToSpeak, OutputFormat: 'mp3', VoiceId: 'Joanna', TextType: 'ssml' }; // Specify SSML type
+            const playBtn = document.createElement('button'); playBtn.id = 'playButton'; playBtn.textContent = '🔊 ...'; playBtn.disabled = true;
+            if (messageDiv) messageDiv.appendChild(playBtn);
+            polly.synthesizeSpeech(params, (err, data) => {
+                if (err) { console.error("Polly Error:", err); playBtn.textContent = '🔊 Err'; setTimeout(() => { if(playBtn.parentNode) playBtn.remove(); }, 2000); }
+                 else if (data && data.AudioStream) {
+                    const audioBlob = new Blob([data.AudioStream], { type: 'audio/mpeg' });
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                         (async () => {
+                             try {
+                                 // Resume AudioContext just before decoding
+                                 if (audioContext.state === 'suspended') {
+                                     await audioContext.resume();
+                                 }
+                                 const audioBuffer = await audioContext.decodeAudioData(e.target.result);
+                                 currentAudioSource = audioContext.createBufferSource(); currentAudioSource.buffer = audioBuffer;
+                                 currentAudioSource.connect(audioContext.destination); currentAudioSource.start(0); playBtn.textContent = '🔊 Playing';
+                                 currentAudioSource.onended = () => { currentAudioSource = null; playBtn.textContent = '🔊 Done'; setTimeout(() => { if(playBtn.parentNode) playBtn.remove(); }, 1500); };
+                             } catch (decodeErr) { console.error("Audio Decode Err:", decodeErr); playBtn.textContent = '🔊 Decode Err'; setTimeout(() => { if(playBtn.parentNode) playBtn.remove(); }, 2000); }
+                         })();
+                    };
+                    reader.onerror = (e) => { console.error("FileReader error:", e); playBtn.textContent = '🔊 Read Err'; setTimeout(() => { if(playBtn.parentNode) playBtn.remove(); }, 2000); }
+                    reader.readAsArrayBuffer(audioBlob);
+                } else { console.log("No Polly audio stream."); playBtn.textContent = '🔊 No Audio'; setTimeout(() => { if(playBtn.parentNode) playBtn.remove(); }, 2000); }
+            });
+        }
+        // Display initial greeting (without playing audio for it)
+        displayMessage("Hello! How can I help you find a recipe today?", 'bot-message');
+    </script>
+
+</body>
+</html>
